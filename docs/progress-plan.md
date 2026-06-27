@@ -46,9 +46,9 @@ Updated: 2026-06-27
 | Chat SSE to Responses SSE conversion | done | translator unit tests pass |
 | In-memory history backfill | done | translator unit tests pass |
 | Release binary build | done | `cargo build --release` passes |
-| Real LiteLLM integration | todo | not run |
+| Real LiteLLM integration | done | M2 passed through `glm-5-2` |
 | Real Codex CLI integration | todo | not run |
-| Production startup/logging | todo | not implemented |
+| Production startup/logging | done | M5 verified |
 
 ## Milestones
 
@@ -99,14 +99,57 @@ Last result: 96 passed, 0 failed.
 
 ### M2: Real Upstream Integration
 
-Status: todo
+Status: done
 
-- [ ] Start LiteLLM on `127.0.0.1:4000`.
-- [ ] Start bridge on `127.0.0.1:4010`.
-- [ ] Verify `GET /v1/models` through bridge.
-- [ ] Send one non-streaming `/v1/responses` request through bridge.
-- [ ] Send one streaming `/v1/responses` request through bridge.
-- [ ] Capture representative request/response fixtures for regression tests.
+- [x] Start LiteLLM on `127.0.0.1:4000`.
+- [x] Start bridge on `127.0.0.1:4010`.
+- [x] Verify `GET /v1/models` through bridge.
+- [x] Send one non-streaming `/v1/responses` request through bridge.
+- [x] Send one streaming `/v1/responses` request through bridge.
+- [x] Capture representative request/response fixtures for regression tests.
+
+Environment:
+
+- LiteLLM config: `/Users/mk/.litellm/opencode-bridge.yaml`
+- LiteLLM listener: `127.0.0.1:4000`
+- Bridge config: `examples/codex-bridge.yaml`
+- Bridge listener: `127.0.0.1:4010`
+- Test model alias: `glm-5-2`
+- Auth source: `LITELLM_MASTER_KEY`
+
+Verification:
+
+```bash
+curl -sS -m 10 -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  http://127.0.0.1:4000/v1/models
+
+RUST_LOG=debug target/release/codex-bridge \
+  --config examples/codex-bridge.yaml
+
+curl -sS -m 10 -w '\nHTTP_STATUS:%{http_code}\n' \
+  http://127.0.0.1:4010/v1/models
+
+curl -sS -m 60 -w '\nHTTP_STATUS:%{http_code}\n' \
+  -H 'Content-Type: application/json' \
+  -X POST http://127.0.0.1:4010/v1/responses \
+  -d '{"model":"glm-5-2","input":"Reply with exactly: bridge nonstream ok","stream":false,"max_output_tokens":64}'
+
+curl -sS -N -m 60 -w '\nHTTP_STATUS:%{http_code}\n' \
+  -H 'Content-Type: application/json' \
+  -X POST http://127.0.0.1:4010/v1/responses \
+  -d '{"model":"glm-5-2","input":"Reply with exactly: bridge stream ok","stream":true,"max_output_tokens":64}'
+```
+
+Results:
+
+- Direct LiteLLM `/v1/models` with bearer auth returned model aliases:
+  `ds-v4-pro`, `ds-v4-flash`, `glm-5-2`, `gemini-3.5-flash`.
+- Bridge `/v1/models` returned HTTP 200 and the same model list.
+- Bridge non-streaming `/v1/responses` returned HTTP 200 with
+  `status: "completed"` and output text `bridge nonstream ok`.
+- Bridge streaming `/v1/responses` returned HTTP 200 with valid Responses SSE
+  events ending in `response.completed` and output text `bridge stream ok`.
+- Fixtures captured under `tests/fixtures/m2-real-upstream/`.
 
 Acceptance:
 
@@ -187,11 +230,8 @@ Results: 103 passed, 0 failed. Release binary: `target/release/codex-bridge`.
 
 ## Open Questions / Blockers
 
-- What exact LiteLLM config will be used for the first end-to-end test?
-- Should `/responses/compact` be a supported endpoint or explicitly return
-  `501 Not Implemented` until semantics are defined?
-- Which models need explicit reasoning capability YAML rather than default
-  translator behavior?
+- No current M2 blockers.
+- Codex CLI integration remains M3.
 
 ## Last Verification
 
@@ -207,6 +247,6 @@ cargo build --release
 Results:
 
 - `cargo check`: passed.
-- `cargo test`: 96 passed, 0 failed.
+- `cargo test`: 103 passed, 0 failed.
 - `cargo build --release`: passed.
 - Release binary: `target/release/codex-bridge`.

@@ -1,0 +1,40 @@
+{
+  "id": "resp_chatcmpl-RyylOYolwRalSxszEhaIdYPP",
+  "object": "response",
+  "created_at": 1782566331,
+  "status": "completed",
+  "model": "glm-5-2",
+  "output": [
+    {
+      "id": "rs_resp_chatcmpl-RyylOYolwRalSxszEhaIdYPP",
+      "type": "reasoning",
+      "summary": [
+        {
+          "type": "summary_text",
+          "text": "The user wants me to reply with exactly \"bridge nonstream ok\"."
+        }
+      ]
+    },
+    {
+      "id": "resp_chatcmpl-RyylOYolwRalSxszEhaIdYPP_msg",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "bridge nonstream ok",
+          "annotations": []
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 20,
+    "output_tokens": 20,
+    "total_tokens": 40,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}
