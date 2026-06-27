@@ -49,6 +49,7 @@ Updated: 2026-06-27
 | Real LiteLLM integration | done | M2 passed through `glm-5-2` |
 | Real Codex CLI integration | done | M3 passed with Codex CLI using `glm-5-2` |
 | Production startup/logging | done | M5 verified |
+| Codex Model Catalog Compatibility | done | M6 verified, no fallback warnings |
 
 ## Milestones
 
@@ -311,11 +312,35 @@ cargo build --release
 Results: 103 passed, 0 failed. Release binary: `target/release/codex-bridge`.
 
 
+### M6: Codex Model Catalog Compatibility
+
+Status: done
+
+- [x] Add bridge-side model catalog response for Codex metadata refresh.
+- [x] Keep OpenAI-compatible `/v1/models` behavior by merging formats.
+- [x] Verify `codex doctor` and `codex exec` no longer emit fallback metadata warnings.
+- [x] Add regression test for model catalog shape.
+
+Implementation notes:
+- Intercepted `/v1/models` upstream response.
+- Translated the standard OpenAI `data` array into the `models` array format expected by Codex CLI.
+- Left the original `data` field intact, serving a hybrid response that satisfies both strict Codex catalog parser and standard OpenAI tooling.
+
+Verification:
+
+```bash
+codex doctor --summary --ascii \
+  -c 'model="glm-5-2"' \
+  -c 'model_provider="codex-bridge"' \
+  -c 'model_providers.codex-bridge={name="Codex Bridge", base_url="http://127.0.0.1:4010", wire_api="responses"}'
+```
+
+Result: 0 warnings, fallback metadata error resolved.
+
 ## Open Questions / Blockers
 
 - No current milestone blockers.
-- Follow-up: decide whether the bridge should synthesize a Codex-compatible
-  model catalog response to remove the Codex CLI fallback metadata warning.
+- Next step: daily-use hardening (longer tool-heavy workflows).
 
 ## Last Verification
 
@@ -331,6 +356,6 @@ cargo build --release
 Results:
 
 - `cargo check`: passed.
-- `cargo test`: 103 passed, 0 failed.
+- `cargo test`: 104 passed, 0 failed.
 - `cargo build --release`: passed.
 - Release binary: `target/release/codex-bridge`.

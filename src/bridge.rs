@@ -175,7 +175,58 @@ async fn handle_models(
         .await
         .map_err(|err| ProxyError::ForwardFailed(err.to_string()))?;
 
-    response_from_upstream(upstream).await
+    let status = upstream.status();
+    if !status.is_success() {
+        return response_from_upstream(upstream).await;
+    }
+
+    let value: Value = upstream
+        .json()
+        .await
+        .map_err(|err| ProxyError::ForwardFailed(err.to_string()))?;
+    
+    let transformed = upstream_models_to_codex_catalog(value);
+    json_response(status, transformed)
+}
+
+fn upstream_models_to_codex_catalog(upstream_json: Value) -> Value {
+    let mut root = match upstream_json {
+        Value::Object(map) => map,
+        other => {
+            let mut map = serde_json::Map::new();
+            map.insert("data".to_string(), other);
+            map
+        }
+    };
+
+    if let Some(Value::Array(data)) = root.get("data") {
+        let mut models = Vec::with_capacity(data.len());
+        for item in data {
+            if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+                models.push(json!({
+                    "slug": id,
+                    "display_name": id,
+                    "supported_reasoning_levels": [],
+                    "shell_type": "default",
+                    "visibility": "list",
+                    "supported_in_api": true,
+                    "priority": 1,
+                    "base_instructions": "",
+                    "supports_reasoning_summaries": false,
+                    "support_verbosity": false,
+                    "truncation_policy": {
+                        "mode": "tokens",
+                        "limit": 128000
+                    },
+                    "supports_parallel_tool_calls": true,
+                    "experimental_supported_tools": []
+                }));
+            }
+        }
+        root.insert("models".to_string(), Value::Array(models));
+    }
+
+    Value::Object(root)
 }
 
 impl BridgeState {
@@ -312,4 +363,37 @@ fn reasoning_config_from_config(config: &BridgeConfig) -> Option<Arc<CodexChatRe
         effort_value_mode: r.effort_value_mode.clone(),
         output_format: r.output_format.clone(),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_upstream_models_to_codex_catalog() {
+        let upstream = json!({
+            "object": "list",
+            "data": [
+                {
+                    "id": "gpt-5-test",
+                    "object": "model"
+                }
+            ]
+        });
+
+        let transformed = upstream_models_to_codex_catalog(upstream);
+
+        let models = transformed.get("models").expect("should have models array").as_array().unwrap();
+        assert_eq!(models.len(), 1);
+        let model = &models[0];
+        assert_eq!(model.get("slug").unwrap().as_str().unwrap(), "gpt-5-test");
+        assert_eq!(model.get("display_name").unwrap().as_str().unwrap(), "gpt-5-test");
+        assert_eq!(model.get("shell_type").unwrap().as_str().unwrap(), "default");
+        assert_eq!(model.get("visibility").unwrap().as_str().unwrap(), "list");
+        assert_eq!(model.get("supported_in_api").unwrap().as_bool().unwrap(), true);
+        assert_eq!(model.get("priority").unwrap().as_i64().unwrap(), 1);
+        assert_eq!(model.get("supports_parallel_tool_calls").unwrap().as_bool().unwrap(), true);
+        assert!(model.get("truncation_policy").unwrap().is_object());
+    }
 }
