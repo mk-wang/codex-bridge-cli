@@ -184,7 +184,7 @@ async fn handle_models(
         .json()
         .await
         .map_err(|err| ProxyError::ForwardFailed(err.to_string()))?;
-    
+
     let transformed = upstream_models_to_codex_catalog(value);
     json_response(status, transformed)
 }
@@ -384,16 +384,36 @@ mod tests {
 
         let transformed = upstream_models_to_codex_catalog(upstream);
 
-        let models = transformed.get("models").expect("should have models array").as_array().unwrap();
+        let models = transformed
+            .get("models")
+            .expect("should have models array")
+            .as_array()
+            .unwrap();
         assert_eq!(models.len(), 1);
         let model = &models[0];
         assert_eq!(model.get("slug").unwrap().as_str().unwrap(), "gpt-5-test");
-        assert_eq!(model.get("display_name").unwrap().as_str().unwrap(), "gpt-5-test");
-        assert_eq!(model.get("shell_type").unwrap().as_str().unwrap(), "default");
+        assert_eq!(
+            model.get("display_name").unwrap().as_str().unwrap(),
+            "gpt-5-test"
+        );
+        assert_eq!(
+            model.get("shell_type").unwrap().as_str().unwrap(),
+            "default"
+        );
         assert_eq!(model.get("visibility").unwrap().as_str().unwrap(), "list");
-        assert_eq!(model.get("supported_in_api").unwrap().as_bool().unwrap(), true);
+        assert_eq!(
+            model.get("supported_in_api").unwrap().as_bool().unwrap(),
+            true
+        );
         assert_eq!(model.get("priority").unwrap().as_i64().unwrap(), 1);
-        assert_eq!(model.get("supports_parallel_tool_calls").unwrap().as_bool().unwrap(), true);
+        assert_eq!(
+            model
+                .get("supports_parallel_tool_calls")
+                .unwrap()
+                .as_bool()
+                .unwrap(),
+            true
+        );
         assert!(model.get("truncation_policy").unwrap().is_object());
     }
 }

@@ -18,7 +18,7 @@ This project follows a "One Milestone = One Commit" workflow to ensure high code
 
 ## 1. Milestone as a Logical Unit
 
-All work is tracked in `docs/progress-plan.md` under specific Milestones (e.g., `M2: Real Upstream Integration`). 
+All work is tracked in `docs/progress-plan.md` under specific Milestones (e.g., `M2: Real Chat Upstream Integration`).
 - **Atomic Commits**: We do not commit partial work for a milestone. A milestone must be fully implemented, tested, and reviewed before it is committed.
 - **Progress Tracking**: During implementation, update the item statuses (`todo` -> `doing` -> `done`) in `docs/progress-plan.md`.
 
@@ -56,5 +56,5 @@ Review findings must be classified to prevent endless review cycles:
 ## 4. Commit
 
 When the review loop is closed (0 Blockers), commit the milestone:
-- Command: `git add <changed paths>` then `git commit -m "Milestone <ID>: <Title>"` (e.g., `Milestone M2: Real Upstream Integration`)
+- Command: `git add <changed paths>` then `git commit -m "Milestone <ID>: <Title>"` (e.g., `Milestone M2: Real Chat Upstream Integration`)
 - Only commit once the full gate and review loop is passed successfully.

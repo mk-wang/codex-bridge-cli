@@ -3,11 +3,13 @@
 Lightweight local bridge for Codex CLI:
 
 ```text
-Codex CLI --/v1/responses--> codex-bridge --/v1/chat/completions--> LiteLLM
+Codex CLI --/v1/responses--> codex-bridge --/v1/chat/completions--> Chat-compatible upstream
 ```
 
 The project is a greenfield Rust CLI with a small HTTP shell and isolated
-translation modules.
+translation modules. The upstream can be any service that accepts
+OpenAI-compatible Chat Completions requests, such as LiteLLM, OpenAI-compatible
+model gateways, or self-hosted Chat endpoints.
 
 Project docs:
 
@@ -43,7 +45,12 @@ target/release/codex-bridge --config examples/codex-bridge.yaml
 ```
 
 The default example listens on `127.0.0.1:4010` and forwards Chat Completions to
-LiteLLM at `http://127.0.0.1:4000/v1/chat/completions`.
+`http://127.0.0.1:4000/v1/chat/completions`. Point `upstream.base_url` and
+`upstream.chat_endpoint` at any Chat Completions compatible service.
+
+The example config reads upstream bearer auth from `UPSTREAM_API_KEY`. To
+forward the inbound `Authorization` header from Codex instead, omit
+`upstream.api_key_env` in your config.
 
 Stop the bridge with `Ctrl-C` (SIGINT) or `kill -TERM <pid>`. The process
 drains in-flight requests before exiting.
@@ -89,7 +96,7 @@ The Chat Completions request was rejected. Common causes:
 - The model name is not recognized by the upstream provider.
 - The request contains fields not accepted by the upstream (e.g. unsupported
   reasoning params). Set `RUST_LOG=debug` to log the outgoing Chat request.
-- LiteLLM requires the full model name including provider prefix, e.g.
+- The upstream gateway requires a provider-qualified model name, e.g.
   `openai/gpt-4o` rather than `gpt-4o`.
 
 ### Upstream 401 Unauthorized
@@ -103,9 +110,9 @@ The API key is missing or wrong. Verify:
 
 ### Upstream 502 Bad Gateway / connection refused
 
-LiteLLM is not reachable at `upstream.base_url`. Check:
+The Chat Completions upstream is not reachable at `upstream.base_url`. Check:
 
-- LiteLLM is running and listening on the configured address.
+- The upstream service is running and listening on the configured address.
 - `upstream.base_url` does not have a trailing slash (e.g.
   `http://127.0.0.1:4000`, not `http://127.0.0.1:4000/`).
 - Firewall or port binding issues if running in a container.

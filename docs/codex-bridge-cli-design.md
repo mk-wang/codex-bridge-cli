@@ -15,15 +15,17 @@ links:
 
 `codex-bridge` is a local protocol bridge for Codex CLI. It accepts OpenAI
 Responses API requests from Codex, converts them to OpenAI Chat Completions
-requests, forwards them to a single upstream Chat-compatible gateway, then maps
-the result back to Responses format.
+requests, forwards them to a single upstream Chat Completions compatible
+service, then maps the result back to Responses format.
 
 ```text
-Codex CLI --/v1/responses--> codex-bridge --/v1/chat/completions--> LiteLLM
+Codex CLI --/v1/responses--> codex-bridge --/v1/chat/completions--> Chat-compatible upstream
 ```
 
 The bridge owns protocol translation only. Routing, model fallback, account
 selection, billing, and upstream provider policy remain outside this binary.
+LiteLLM is one supported upstream shape, not a requirement; any service that
+accepts OpenAI-style Chat Completions JSON and SSE can be used.
 
 ## Status Source
 
@@ -86,7 +88,7 @@ Example:
 ```yaml
 upstream:
   base_url: http://127.0.0.1:4000
-  api_key_env: LITELLM_MASTER_KEY
+  api_key_env: UPSTREAM_API_KEY
   timeout: 300
   chat_endpoint: /v1/chat/completions
 server:
@@ -110,8 +112,8 @@ Runtime behavior:
   oldest responses are evicted when the limit is reached.
 - `reasoning` is an optional section that overrides the translator's built-in
   model-name-based reasoning capability inference. Useful when models are
-  served under custom aliases through LiteLLM. When the section is absent (or
-  all fields are null), the translator falls back to its default inference.
+  served under custom aliases by an upstream gateway. When the section is absent
+  (or all fields are null), the translator falls back to its default inference.
 
 ## Request Flow
 
@@ -138,12 +140,12 @@ Runtime behavior:
 | `/responses` | POST | Alias for `/v1/responses`. |
 | `/v1/responses/compact` | POST | Forwarded to the same handler as `/v1/responses`. The Responses `/compact` endpoint compacts prior conversation turns into a single `previous_response_id`. The bridge receives only the final compacted form; no special handling is needed beyond the existing history enrichment. |
 | `/responses/compact` | POST | Alias for `/v1/responses/compact`. |
-| `/v1/models` | GET | Proxied transparently to `upstream.base_url/v1/models`. |
+| `/v1/models` | GET | Fetches `upstream.base_url/v1/models` and returns a hybrid model catalog: the upstream OpenAI-style `data` field is preserved, and a Codex-compatible top-level `models` field is synthesized when possible. |
 | `/models` | GET | Alias for `/v1/models`. |
 
 ## Invariants
 
-- The bridge speaks Responses to Codex and Chat Completions to upstream.
+- The bridge speaks Responses to Codex and Chat Completions to the upstream.
 - The bridge has exactly one upstream target per process.
 - Protocol translation must be deterministic for the same request/response.
 - Tool call names flattened for Chat must be restorable to Responses output
@@ -160,7 +162,7 @@ Runtime behavior:
 - Gemini native protocol translation.
 - MCP proxying.
 - Codex OAuth or account management.
-- LiteLLM source patches.
+- Upstream gateway source patches.
 - Persistent usage/billing storage.
 - Built-in provider failover.
 - Disk persistence for `previous_response_id` history.

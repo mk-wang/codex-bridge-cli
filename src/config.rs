@@ -41,7 +41,7 @@ pub struct HistoryConfig {
 ///
 /// When present, the translator uses these values instead of inferring
 /// reasoning parameters from the model name. Useful for models served via
-/// LiteLLM under custom aliases.
+/// an upstream gateway under custom aliases.
 ///
 /// Example YAML:
 /// ```yaml

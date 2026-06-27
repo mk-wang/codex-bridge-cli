@@ -1,6 +1,6 @@
 upstream:
   base_url: http://127.0.0.1:4000
-  api_key_env: LITELLM_MASTER_KEY
+  api_key_env: UPSTREAM_API_KEY
   timeout: 300
   chat_endpoint: /v1/chat/completions
 server:
@@ -9,8 +9,8 @@ server:
 history:
   max_cached_responses: 512
 # Optional: override translator reasoning capability inference for models
-# served under custom aliases in LiteLLM. Remove the block to use the default
-# model-name-based inference.
+# served under custom aliases by the upstream gateway. Remove the block to use
+# the default model-name-based inference.
 #reasoning:
 #  supports_thinking: true
 #  supports_effort: false

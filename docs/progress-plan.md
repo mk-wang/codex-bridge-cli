@@ -46,10 +46,11 @@ Updated: 2026-06-27
 | Chat SSE to Responses SSE conversion | done | translator unit tests pass |
 | In-memory history backfill | done | translator unit tests pass |
 | Release binary build | done | `cargo build --release` passes |
-| Real LiteLLM integration | done | M2 passed through `glm-5-2` |
+| Real Chat upstream integration | done | M2 passed through a Chat-compatible upstream using `glm-5-2` |
 | Real Codex CLI integration | done | M3 passed with Codex CLI using `glm-5-2` |
 | Production startup/logging | done | M5 verified |
 | Codex Model Catalog Compatibility | done | M6 verified, no fallback warnings |
+| Upstream scope documentation | done | M7 clarified support for any Chat Completions compatible upstream |
 
 ## Milestones
 
@@ -98,25 +99,28 @@ cargo test
 
 Last result: 96 passed, 0 failed.
 
-### M2: Real Upstream Integration
+### M2: Real Chat Upstream Integration
 
 Status: done
 
-- [x] Start LiteLLM on `127.0.0.1:4000`.
+- [x] Start a Chat Completions compatible upstream on `127.0.0.1:4000`.
 - [x] Start bridge on `127.0.0.1:4010`.
 - [x] Verify `GET /v1/models` through bridge.
 - [x] Send one non-streaming `/v1/responses` request through bridge.
 - [x] Send one streaming `/v1/responses` request through bridge.
 - [x] Capture representative request/response fixtures for regression tests.
 
-Environment:
+Verified environment:
 
-- LiteLLM config: `/Users/mk/.litellm/opencode-bridge.yaml`
-- LiteLLM listener: `127.0.0.1:4000`
+- Upstream type: LiteLLM serving an OpenAI-compatible Chat Completions API.
+- Upstream config: `/Users/mk/.litellm/opencode-bridge.yaml`
+- Upstream listener: `127.0.0.1:4000`
 - Bridge config: `examples/codex-bridge.yaml`
 - Bridge listener: `127.0.0.1:4010`
 - Test model alias: `glm-5-2`
-- Auth source: `LITELLM_MASTER_KEY`
+- Direct upstream auth source: `LITELLM_MASTER_KEY`
+- Bridge auth env: `UPSTREAM_API_KEY`, populated from the same verified
+  upstream credential for this run.
 
 Verification:
 
@@ -124,6 +128,7 @@ Verification:
 curl -sS -m 10 -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
   http://127.0.0.1:4000/v1/models
 
+UPSTREAM_API_KEY="$LITELLM_MASTER_KEY" \
 RUST_LOG=debug target/release/codex-bridge \
   --config examples/codex-bridge.yaml
 
@@ -143,7 +148,7 @@ curl -sS -N -m 60 -w '\nHTTP_STATUS:%{http_code}\n' \
 
 Results:
 
-- Direct LiteLLM `/v1/models` with bearer auth returned model aliases:
+- Direct upstream `/v1/models` with bearer auth returned model aliases:
   `ds-v4-pro`, `ds-v4-flash`, `glm-5-2`, `gemini-3.5-flash`.
 - Bridge `/v1/models` returned HTTP 200 and the same model list.
 - Bridge non-streaming `/v1/responses` returned HTTP 200 with
@@ -158,6 +163,13 @@ Acceptance:
 - Upstream Chat request is accepted.
 - Codex-compatible Responses JSON/SSE is returned.
 - No malformed SSE or JSON conversion errors in logs.
+
+Scope note:
+
+- M2 used LiteLLM as the verified upstream gateway, but the bridge contract is
+  not LiteLLM-specific. Any upstream that accepts OpenAI-compatible Chat
+  Completions JSON and Chat SSE can be configured via `upstream.base_url` and
+  `upstream.chat_endpoint`.
 
 ### M3: Codex CLI Integration
 
@@ -245,13 +257,6 @@ Fixtures:
 - `tests/fixtures/m3-codex-cli/tool-turn.jsonl`
 - `tests/fixtures/m3-codex-cli/followup-turn.jsonl`
 
-Residual note:
-
-- Codex CLI logs a non-blocking metadata warning because its model refresh path
-  expects a top-level `models` catalog response, while the bridge currently
-  proxies LiteLLM's OpenAI-style `/v1/models` response with top-level `data`.
-  Turns still complete using fallback model metadata.
-
 Acceptance:
 
 - Codex completes a normal answer.
@@ -325,6 +330,8 @@ Implementation notes:
 - Intercepted `/v1/models` upstream response.
 - Translated the standard OpenAI `data` array into the `models` array format expected by Codex CLI.
 - Left the original `data` field intact, serving a hybrid response that satisfies both strict Codex catalog parser and standard OpenAI tooling.
+- This applies to any upstream that exposes an OpenAI-compatible `/v1/models`
+  list with `data[].id`; LiteLLM is only one verified source of that shape.
 
 Verification:
 
@@ -336,6 +343,38 @@ codex doctor --summary --ascii \
 ```
 
 Result: 0 warnings, fallback metadata error resolved.
+
+### M7: Upstream Scope Documentation
+
+Status: done
+
+- [x] Update README to describe the bridge as Chat Completions upstream
+  compatible, not LiteLLM-specific.
+- [x] Update design docs to define the protocol contract and model catalog
+  behavior generically.
+- [x] Update workflow/progress references to use generic milestone naming.
+- [x] Update example config and code comments to use `UPSTREAM_API_KEY` and
+  generic upstream gateway language.
+- [x] Preserve LiteLLM only as a verified sample environment in historical M2
+  evidence.
+
+Verification:
+
+```bash
+rg -n "LiteLLM|litellm|LITELLM|Real Upstream Integration|proxies LiteLLM|LiteLLM source|Chat-compatible gateway|only supported|requirement" README.md docs examples src AGENTS.md
+git diff --check
+cargo fmt
+cargo check
+cargo test
+```
+
+Results:
+
+- Remaining LiteLLM mentions are limited to examples of supported upstream
+  shapes and historical M2 verification evidence.
+- `git diff --check`: passed.
+- `cargo check`: passed.
+- `cargo test`: 104 passed, 0 failed.
 
 ## Open Questions / Blockers
 
