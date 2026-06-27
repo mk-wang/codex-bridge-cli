@@ -17,9 +17,9 @@ Project docs:
 - [Progress plan](docs/progress-plan.md)
 - [Workflow](docs/workflow.md)
 
-## GUI Manager
+## Acknowledgments
 
-If you are looking for a graphical interface to manage Codex CLI and other AI coding agents (such as Claude Code, Gemini CLI, OpenCode, OpenClaw, and Hermes Agent), check out **[cc-switch](https://github.com/farion1231/cc-switch)**: an open-source, cross-platform desktop All-in-One assistant.
+The core code of this project was directly taken from **[cc-switch](https://github.com/farion1231/cc-switch)**. A huge thanks to this project!
 
 ## Requirements
 
