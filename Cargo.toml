@@ -1,0 +1,34 @@
+[package]
+name = "codex-bridge-cli"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.0"
+
+[[bin]]
+name = "codex-bridge"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+async-stream = "0.3"
+axum = "0.7"
+bytes = "1.5"
+clap = { version = "4.5", features = ["derive"] }
+futures = "0.3"
+http = "1"
+indexmap = { version = "2", features = ["serde"] }
+log = "0.4"
+regex = "1.10"
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde_yaml = "0.9"
+sha2 = "0.10"
+thiserror = "2.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
+tokio-stream = "0.1"
+tower-http = { version = "0.5", features = ["cors"] }
+uuid = { version = "1.11", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"

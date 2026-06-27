@@ -1,0 +1,146 @@
+---
+owner: codex-bridge maintainers
+status: active
+updated: 2026-06-27
+tags:
+  - architecture
+  - protocol-bridge
+links:
+  - progress-plan.md
+---
+
+# codex-bridge-cli Design
+
+## Purpose
+
+`codex-bridge` is a local protocol bridge for Codex CLI. It accepts OpenAI
+Responses API requests from Codex, converts them to OpenAI Chat Completions
+requests, forwards them to a single upstream Chat-compatible gateway, then maps
+the result back to Responses format.
+
+```text
+Codex CLI --/v1/responses--> codex-bridge --/v1/chat/completions--> LiteLLM
+```
+
+The bridge owns protocol translation only. Routing, model fallback, account
+selection, billing, and upstream provider policy remain outside this binary.
+
+## Status Source
+
+Implementation status, verification results, next milestones, and blockers live
+in [progress-plan.md](progress-plan.md). Keep this document focused on stable
+architecture and protocol boundaries.
+
+## Module Boundaries
+
+### HTTP Shell
+
+`src/bridge.rs` is the only place that should know about axum, reqwest, route
+registration, upstream URLs, headers, and HTTP response bodies.
+
+Responsibilities:
+
+- Read inbound Responses JSON.
+- Enrich request history before conversion.
+- Build tool context from the original Responses request.
+- Convert request JSON to Chat Completions JSON.
+- Forward to the configured upstream Chat endpoint.
+- Convert non-streaming Chat JSON responses back to Responses JSON.
+- Convert streaming Chat SSE responses back to Responses SSE.
+- Record tool-call output items into in-memory history.
+
+The HTTP shell should stay thin. Translation rules belong in the translation
+modules, not in route handlers.
+
+### Translation Core
+
+The translation core lives under `src/proxy/`:
+
+- `providers/transform_codex_chat.rs`
+  - Responses request to Chat request.
+  - Chat non-streaming response to Responses response.
+  - Error shape normalization.
+  - Tool context creation and tool-name restoration.
+- `providers/streaming_codex_chat.rs`
+  - Chat SSE to Responses SSE state machine.
+  - Text, reasoning, inline `<think>`, usage, and tool-call event sequencing.
+- `providers/codex_chat_history.rs`
+  - In-memory response history.
+  - Follow-up request enrichment for tool outputs missing their prior calls.
+- `providers/codex_chat_common.rs`
+  - Shared reasoning extraction and response item helpers.
+- `sse.rs`
+  - SSE block parsing and UTF-8-safe buffering.
+- `json_canonical.rs`
+  - Canonical JSON and tool-argument normalization.
+- `error.rs`
+  - Bridge error type and JSON error responses.
+
+`src/provider.rs` intentionally contains only the reasoning capability
+descriptor needed by the translator. It is not a provider router.
+
+### Configuration
+
+Example:
+
+```yaml
+upstream:
+  base_url: http://127.0.0.1:4000
+  api_key_env: LITELLM_MASTER_KEY
+  timeout: 300
+  chat_endpoint: /v1/chat/completions
+server:
+  host: 127.0.0.1
+  port: 4010
+history:
+  max_cached_responses: 512
+```
+
+Runtime behavior:
+
+- `upstream.base_url` and `upstream.chat_endpoint` form the Chat Completions
+  target URL.
+- `upstream.api_key_env` is read at request time. If present and non-empty, it
+  is sent as bearer auth.
+- If no configured API key is available, inbound `Authorization` is forwarded.
+- `server.host` and `server.port` control the listener.
+- `history.max_cached_responses` is part of the configuration schema. See
+  [progress-plan.md](progress-plan.md) for current implementation status.
+
+## Request Flow
+
+1. Codex sends a Responses request to `/v1/responses`.
+2. `CodexChatHistoryStore::enrich_request` restores prior tool-call context
+   when possible.
+3. `build_codex_tool_context_from_request` records mappings needed to restore
+   namespace, custom, and tool-search calls.
+4. `responses_to_chat_completions_with_reasoning` converts the request to Chat
+   Completions.
+5. The bridge forwards JSON to the configured upstream.
+6. For non-streaming responses, `chat_completion_to_response_with_context`
+   converts the response back and the store records tool calls.
+7. For streaming responses,
+   `create_responses_sse_stream_from_chat_with_context` converts SSE chunks and
+   `record_responses_sse_stream` records completed tool-call items.
+
+## Invariants
+
+- The bridge speaks Responses to Codex and Chat Completions to upstream.
+- The bridge has exactly one upstream target per process.
+- Protocol translation must be deterministic for the same request/response.
+- Tool call names flattened for Chat must be restorable to Responses output
+  items.
+- Streaming output must emit valid Responses SSE event order.
+- UTF-8 split boundaries in upstream SSE chunks must not corrupt data.
+- History is in-memory only; process restart clears it.
+
+## Out Of Scope
+
+- Anthropic Messages protocol translation.
+- Gemini native protocol translation.
+- MCP proxying.
+- Codex OAuth or account management.
+- LiteLLM source patches.
+- Persistent usage/billing storage.
+- Built-in provider failover.
+- Disk persistence for `previous_response_id` history.
