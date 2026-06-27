@@ -17,6 +17,10 @@ Project docs:
 - [Progress plan](docs/progress-plan.md)
 - [Workflow](docs/workflow.md)
 
+## GUI Manager
+
+If you are looking for a graphical interface to manage Codex CLI and other AI coding agents (such as Claude Code, Gemini CLI, OpenCode, OpenClaw, and Hermes Agent), check out **[cc-switch](https://github.com/farion1231/cc-switch)**: an open-source, cross-platform desktop All-in-One assistant.
+
 ## Requirements
 
 - Rust 1.85.0 or newer. Install via [rustup](https://rustup.rs/).
