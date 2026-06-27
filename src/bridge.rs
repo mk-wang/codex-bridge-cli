@@ -21,6 +21,7 @@ use futures::TryStreamExt;
 use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tower_http::cors::CorsLayer;
+use tracing::{debug, info, warn};
 
 #[derive(Clone)]
 pub struct BridgeState {
@@ -90,14 +91,56 @@ pub async fn serve(state: BridgeState) -> Result<(), ProxyError> {
         .map_err(|err| ProxyError::Internal(err.to_string()))
 }
 
+/// Serve the bridge and stop gracefully when SIGINT or SIGTERM is received.
+pub async fn serve_with_graceful_shutdown(state: BridgeState) -> Result<(), ProxyError> {
+    let addr = state.bind_addr();
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|err| ProxyError::BindFailed(err.to_string()))?;
+    info!(address = %addr, "listening");
+    axum::serve(listener, router(state))
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .map_err(|err| ProxyError::Internal(err.to_string()))
+}
+
+async fn shutdown_signal() {
+    use tokio::signal;
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C handler");
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => { info!("received SIGINT, shutting down"); },
+        _ = terminate => { info!("received SIGTERM, shutting down"); },
+    }
+}
+
 async fn handle_responses(
     State(state): State<BridgeState>,
     headers: HeaderMap,
     Json(mut body): Json<Value>,
 ) -> Result<Response<Body>, ProxyError> {
+    let model = body
+        .get("model")
+        .and_then(|v| v.as_str())
+        .unwrap_or("<unknown>")
+        .to_string();
+    let stream = body.get("stream").and_then(Value::as_bool).unwrap_or(false);
+    debug!(model = %model, stream = stream, "responses request");
+
     state.history.enrich_request(&mut body).await;
     let tool_context = build_codex_tool_context_from_request(&body);
-    let stream = body.get("stream").and_then(Value::as_bool).unwrap_or(false);
     let reasoning_config = state.reasoning_config.as_deref();
     let chat_body = responses_to_chat_completions_with_reasoning(body, reasoning_config)?;
 
@@ -107,6 +150,13 @@ async fn handle_responses(
         .send()
         .await
         .map_err(|err| ProxyError::ForwardFailed(err.to_string()))?;
+
+    let upstream_status = upstream.status();
+    if !upstream_status.is_success() {
+        warn!(status = %upstream_status, model = %model, "upstream returned error");
+    } else {
+        debug!(status = %upstream_status, model = %model, "upstream responded");
+    }
 
     if stream {
         return state.stream_response(upstream, tool_context).await;

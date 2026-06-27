@@ -19,6 +19,7 @@ use crate::proxy::{
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
+use tracing::warn;
 
 const EXTRA_CHAT_PASSTHROUGH_FIELDS: &[&str] = &[
     "frequency_penalty",
@@ -1403,7 +1404,7 @@ fn chat_tool_calls_to_response_output_items(
             let function = tool_call.get("function").unwrap_or(&Value::Null);
             let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
             if name.is_empty() {
-                log::warn!("[Codex] Skipping tool call with missing name");
+                warn!("skipping tool call with missing name");
                 continue;
             }
             output.push(chat_tool_call_to_response_item(
@@ -1470,7 +1471,7 @@ fn chat_legacy_function_call_to_response_item(
     // Skip legacy function calls with missing names (defensive: some models
     // may generate function_call without providing a valid name)
     if name.is_empty() {
-        log::warn!("[Codex] Skipping legacy function_call with missing name");
+        warn!("skipping legacy function_call with missing name");
         return None;
     }
 

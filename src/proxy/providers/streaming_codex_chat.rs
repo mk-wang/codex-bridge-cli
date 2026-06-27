@@ -17,6 +17,7 @@ use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use tracing::warn;
 
 #[derive(Debug, Default)]
 struct TextItemState {
@@ -709,7 +710,7 @@ impl ChatToResponsesState {
                 if let Some(state) = self.tools.get_mut(&key) {
                     state.done = true;
                 }
-                log::warn!("[Codex] Skipping streaming tool call with missing name");
+                warn!("skipping streaming tool call with missing name");
                 continue;
             }
 

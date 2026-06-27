@@ -158,18 +158,32 @@ Total: 103 passed, 0 failed.
 
 ### M5: Operational Readiness
 
-Status: todo
+Status: done
 
-- [ ] Add structured logging.
-- [ ] Add startup script for local use.
-- [ ] Add documented install/build path.
-- [ ] Add graceful shutdown behavior.
-- [ ] Add troubleshooting section for upstream 400/401/502/SSE failures.
+- [x] Add structured logging.
+- [x] Add startup script for local use.
+- [x] Add documented install/build path.
+- [x] Add graceful shutdown behavior.
+- [x] Add troubleshooting section for upstream 400/401/502/SSE failures.
 
-Acceptance:
+Implementation notes:
 
-- A fresh checkout can be built, configured, started, smoke-tested, and stopped
-  from docs alone.
+- Replaced `log` crate with `tracing` + `tracing-subscriber` (env-filter).
+  Startup emits `info` events; per-request debug; upstream errors emit `warn`.
+- `serve_with_graceful_shutdown` listens for SIGINT and SIGTERM; in-flight
+  requests drain before the process exits.
+- `scripts/run.sh` builds the release binary if missing, then launches.
+- `README.md` has Requirements, Install, Run, Logging, and Troubleshooting.
+
+Verification:
+
+```bash
+cargo fmt && cargo check && cargo test
+cargo build --release
+```
+
+Results: 103 passed, 0 failed. Release binary: `target/release/codex-bridge`.
+
 
 ## Open Questions / Blockers
 
