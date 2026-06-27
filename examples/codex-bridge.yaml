@@ -8,3 +8,10 @@ server:
   port: 4010
 history:
   max_cached_responses: 512
+# Optional: override translator reasoning capability inference for models
+# served under custom aliases in LiteLLM. Remove the block to use the default
+# model-name-based inference.
+#reasoning:
+#  supports_thinking: true
+#  supports_effort: false
+#  thinking_param: thinking

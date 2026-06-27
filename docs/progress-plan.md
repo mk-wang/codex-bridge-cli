@@ -133,17 +133,28 @@ Acceptance:
 
 ### M4: Config Completion
 
-Status: todo
+Status: done
 
-- [ ] Wire `history.max_cached_responses` into `CodexChatHistoryStore`.
-- [ ] Add optional YAML reasoning capability config.
-- [ ] Decide whether `/responses/compact` needs distinct handling.
-- [ ] Add config validation errors for empty upstream URL and invalid endpoint.
+- [x] Wire `history.max_cached_responses` into `CodexChatHistoryStore`.
+- [x] Add optional YAML reasoning capability config.
+- [x] Decide whether `/responses/compact` needs distinct handling.
+- [x] Add config validation errors for empty upstream URL and invalid endpoint.
 
-Acceptance:
+Decision — `/responses/compact`: Forwarded to the same handler as
+`/v1/responses`. The compact endpoint compacts prior turns server-side before
+the request arrives; the bridge receives only the compacted form and applies
+its standard history enrichment. No separate handling is required.
 
-- Config fields either affect runtime behavior or are removed.
-- Invalid config fails at startup with actionable errors.
+Verification:
+
+```bash
+cargo test
+```
+
+New tests: `config::tests::*` (6 tests covering validation and new fields),
+`codex_chat_history::tests::with_capacity_evicts_oldest_when_full`.
+Total: 103 passed, 0 failed.
+
 
 ### M5: Operational Readiness
 

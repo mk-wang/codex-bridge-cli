@@ -1,4 +1,5 @@
 use crate::config::BridgeConfig;
+use crate::provider::CodexChatReasoningConfig;
 use crate::proxy::error::ProxyError;
 use crate::proxy::providers::codex_chat_history::{
     record_responses_sse_stream, CodexChatHistoryStore,
@@ -26,11 +27,14 @@ pub struct BridgeState {
     config: Arc<BridgeConfig>,
     client: reqwest::Client,
     history: Arc<CodexChatHistoryStore>,
+    reasoning_config: Option<Arc<CodexChatReasoningConfig>>,
 }
 
 impl BridgeState {
     pub fn new(config: BridgeConfig) -> Result<Self, ProxyError> {
         let timeout = Duration::from_secs(config.upstream.timeout);
+        let max_cached_responses = config.history.max_cached_responses;
+        let reasoning_config = reasoning_config_from_config(&config);
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
@@ -39,7 +43,8 @@ impl BridgeState {
         Ok(Self {
             config: Arc::new(config),
             client,
-            history: Arc::new(CodexChatHistoryStore::default()),
+            history: Arc::new(CodexChatHistoryStore::with_capacity(max_cached_responses)),
+            reasoning_config,
         })
     }
 
@@ -93,7 +98,8 @@ async fn handle_responses(
     state.history.enrich_request(&mut body).await;
     let tool_context = build_codex_tool_context_from_request(&body);
     let stream = body.get("stream").and_then(Value::as_bool).unwrap_or(false);
-    let chat_body = responses_to_chat_completions_with_reasoning(body, None)?;
+    let reasoning_config = state.reasoning_config.as_deref();
+    let chat_body = responses_to_chat_completions_with_reasoning(body, reasoning_config)?;
 
     let upstream = state
         .apply_upstream_headers(state.client.post(state.chat_url()), &headers)
@@ -229,4 +235,31 @@ pub fn health_payload() -> Value {
         "status": "ok",
         "service": "codex-bridge"
     })
+}
+
+/// Build a [`CodexChatReasoningConfig`] from the `reasoning` section of the
+/// YAML config.  Returns `None` when the section is entirely empty (all
+/// fields are `None`), so the translator falls back to its built-in
+/// model-name inference.
+fn reasoning_config_from_config(config: &BridgeConfig) -> Option<Arc<CodexChatReasoningConfig>> {
+    let r = &config.reasoning;
+    let any_set = r.supports_thinking.is_some()
+        || r.supports_effort.is_some()
+        || r.thinking_param.is_some()
+        || r.effort_param.is_some()
+        || r.effort_value_mode.is_some()
+        || r.output_format.is_some();
+
+    if !any_set {
+        return None;
+    }
+
+    Some(Arc::new(CodexChatReasoningConfig {
+        supports_thinking: r.supports_thinking,
+        supports_effort: r.supports_effort,
+        thinking_param: r.thinking_param.clone(),
+        effort_param: r.effort_param.clone(),
+        effort_value_mode: r.effort_value_mode.clone(),
+        output_format: r.output_format.clone(),
+    }))
 }

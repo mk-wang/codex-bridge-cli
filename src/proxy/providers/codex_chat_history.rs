@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-const MAX_CACHED_RESPONSES: usize = 512;
+const DEFAULT_MAX_CACHED_RESPONSES: usize = 512;
 
 #[derive(Debug, Clone, Default)]
 struct CachedResponse {
@@ -15,11 +15,23 @@ struct CachedResponse {
     call_order: Vec<String>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct CodexChatHistoryInner {
     responses: HashMap<String, CachedResponse>,
     response_order: VecDeque<String>,
     call_index: HashMap<String, VecDeque<String>>,
+    max_cached_responses: usize,
+}
+
+impl Default for CodexChatHistoryInner {
+    fn default() -> Self {
+        Self {
+            responses: HashMap::new(),
+            response_order: VecDeque::new(),
+            call_index: HashMap::new(),
+            max_cached_responses: DEFAULT_MAX_CACHED_RESPONSES,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -42,6 +54,18 @@ struct CachedLookup {
 #[derive(Debug, Default)]
 pub struct CodexChatHistoryStore {
     inner: RwLock<CodexChatHistoryInner>,
+}
+
+impl CodexChatHistoryStore {
+    /// Create a store with a configured maximum number of cached responses.
+    pub fn with_capacity(max_cached_responses: usize) -> Self {
+        Self {
+            inner: RwLock::new(CodexChatHistoryInner {
+                max_cached_responses,
+                ..CodexChatHistoryInner::default()
+            }),
+        }
+    }
 }
 
 impl CodexChatHistoryStore {
@@ -231,7 +255,7 @@ impl CodexChatHistoryInner {
     }
 
     fn prune(&mut self) {
-        while self.response_order.len() > MAX_CACHED_RESPONSES {
+        while self.response_order.len() > self.max_cached_responses {
             let Some(response_id) = self.response_order.pop_front() else {
                 break;
             };
@@ -859,5 +883,51 @@ mod tests {
 
         assert_eq!(history.enrich_request(&mut request).await, 1);
         assert_eq!(request["input"][0]["reasoning_content"], "Need a file.");
+    }
+
+    #[tokio::test]
+    async fn with_capacity_evicts_oldest_when_full() {
+        let history = CodexChatHistoryStore::with_capacity(1);
+
+        // Fill the store with one response.
+        history
+            .record_response(&json!({
+                "id": "resp_old",
+                "output": [{
+                    "type": "function_call",
+                    "call_id": "call_old",
+                    "name": "old_fn",
+                    "arguments": "{}"
+                }]
+            }))
+            .await;
+
+        // Adding a second response should evict the first.
+        history
+            .record_response(&json!({
+                "id": "resp_new",
+                "output": [{
+                    "type": "function_call",
+                    "call_id": "call_new",
+                    "name": "new_fn",
+                    "arguments": "{}"
+                }]
+            }))
+            .await;
+
+        // The old call_id is no longer uniquely resolvable (evicted).
+        let mut req_old = json!({
+            "input": [{"type": "function_call_output", "call_id": "call_old", "output": "x"}]
+        });
+        // evicted — should not be restored
+        assert_eq!(history.enrich_request(&mut req_old).await, 0);
+
+        // The new call_id is still present.
+        let mut req_new = json!({
+            "previous_response_id": "resp_new",
+            "input": [{"type": "function_call_output", "call_id": "call_new", "output": "x"}]
+        });
+        assert_eq!(history.enrich_request(&mut req_new).await, 1);
+        assert_eq!(req_new["input"][0]["type"], "function_call");
     }
 }

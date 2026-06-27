@@ -99,13 +99,19 @@ history:
 Runtime behavior:
 
 - `upstream.base_url` and `upstream.chat_endpoint` form the Chat Completions
-  target URL.
+  target URL. Both are validated at startup: `base_url` must be non-empty;
+  `chat_endpoint` must be non-empty and start with `/`.
 - `upstream.api_key_env` is read at request time. If present and non-empty, it
   is sent as bearer auth.
 - If no configured API key is available, inbound `Authorization` is forwarded.
 - `server.host` and `server.port` control the listener.
-- `history.max_cached_responses` is part of the configuration schema. See
-  [progress-plan.md](progress-plan.md) for current implementation status.
+- `history.max_cached_responses` caps the in-memory response cache. The
+  configured value is wired through to `CodexChatHistoryStore::with_capacity`;
+  oldest responses are evicted when the limit is reached.
+- `reasoning` is an optional section that overrides the translator's built-in
+  model-name-based reasoning capability inference. Useful when models are
+  served under custom aliases through LiteLLM. When the section is absent (or
+  all fields are null), the translator falls back to its default inference.
 
 ## Request Flow
 
@@ -123,6 +129,18 @@ Runtime behavior:
    `create_responses_sse_stream_from_chat_with_context` converts SSE chunks and
    `record_responses_sse_stream` records completed tool-call items.
 
+## Endpoints
+
+| Path | Method | Behavior |
+|---|---|---|
+| `/health` | GET | Returns `{"status":"ok","service":"codex-bridge"}`. |
+| `/v1/responses` | POST | Main Responses → Chat Completions bridge route. |
+| `/responses` | POST | Alias for `/v1/responses`. |
+| `/v1/responses/compact` | POST | Forwarded to the same handler as `/v1/responses`. The Responses `/compact` endpoint compacts prior conversation turns into a single `previous_response_id`. The bridge receives only the final compacted form; no special handling is needed beyond the existing history enrichment. |
+| `/responses/compact` | POST | Alias for `/v1/responses/compact`. |
+| `/v1/models` | GET | Proxied transparently to `upstream.base_url/v1/models`. |
+| `/models` | GET | Alias for `/v1/models`. |
+
 ## Invariants
 
 - The bridge speaks Responses to Codex and Chat Completions to upstream.
@@ -133,6 +151,8 @@ Runtime behavior:
 - Streaming output must emit valid Responses SSE event order.
 - UTF-8 split boundaries in upstream SSE chunks must not corrupt data.
 - History is in-memory only; process restart clears it.
+- Config is validated at startup; invalid fields cause a hard exit with an
+  actionable error message.
 
 ## Out Of Scope
 
