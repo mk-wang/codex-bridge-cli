@@ -8,6 +8,7 @@ links:
   - README.md
   - docs/codex-bridge-cli-design.md
   - docs/progress-plan.md
+  - docs/workflow.md
 ---
 
 # Agent Instructions
@@ -22,6 +23,7 @@ Before making changes, read:
 1. `README.md`
 2. `docs/codex-bridge-cli-design.md`
 3. `docs/progress-plan.md`
+4. `docs/workflow.md`
 
 `docs/progress-plan.md` is the durable plan mode and progress tracker. Update it
 whenever implementation status, scope, blockers, or verification results change.

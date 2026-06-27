@@ -13,6 +13,7 @@ Project docs:
 
 - [Design](docs/codex-bridge-cli-design.md)
 - [Progress plan](docs/progress-plan.md)
+- [Workflow](docs/workflow.md)
 
 ## Build
 
