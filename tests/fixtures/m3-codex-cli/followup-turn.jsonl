@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"019f0945-81f6-7380-89c9-4e1c7d6ed1e2"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `glm-5-2` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"codex-bridge-followup-ok"}}
+{"type":"turn.completed","usage":{"input_tokens":105974,"cached_input_tokens":70464,"output_tokens":50,"reasoning_output_tokens":15}}
